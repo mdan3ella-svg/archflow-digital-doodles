@@ -27,12 +27,13 @@ import {
   History,
   X,
   RefreshCw,
-  Eye
+  Eye,
+  AlertTriangle
 } from 'lucide-react';
 
 /**
- * NEO-ARCH | v3.0.6 [STABILITY_HOTFIX]
- * Resolved: Missing Fonts, Icon Rendering, and Environment Scaling
+ * NEO-ARCH | v3.0.7 [DIAGNOSTIC_UPGRADE]
+ * Feature: Real-time Runtime Error Reporting in UI
  */
 
 // --- 1. CONFIGURATION & FALLBACKS ---
@@ -72,10 +73,22 @@ const App = () => {
   const [isVaultOpen, setIsVaultOpen] = useState(false);
   const [evalData, setEvalData] = useState(null);
   const [isEvaluating, setIsEvaluating] = useState(false);
+  const [runtimeError, setRuntimeError] = useState(null);
 
   const containerRef = useRef(null);
   const sceneRef = useRef(null);
   const GEMINI_API_KEY = ""; 
+
+  // --- SELF-DIAGNOSTIC KERNEL ---
+  useEffect(() => {
+    const handleError = (event) => {
+      const errorMsg = event.error?.message || "Unknown Runtime Error";
+      addLog(`CRITICAL: ${errorMsg}`);
+      setRuntimeError(errorMsg);
+    };
+    window.addEventListener('error', handleError);
+    return () => window.removeEventListener('error', handleError);
+  }, []);
 
   const MOCK_PROJECTS = [
     { id: '1', style: 'blueprint', params: { complexity: 8, lineWeight: 1.0 }, timestamp: { toDate: () => new Date() } },
@@ -109,7 +122,7 @@ const App = () => {
         }
       };
       initAuth();
-      return onAuthStateChanged(auth, (u) => u && setUser(u));
+      if (auth) return onAuthStateChanged(auth, (u) => u && setUser(u));
     }
   }, []);
 
@@ -118,7 +131,7 @@ const App = () => {
     const projectCol = collection(db, 'artifacts', appId, 'users', user.uid, 'projects');
     return onSnapshot(projectCol, (snap) => {
       setSavedProjects(snap.docs.map(d => ({ id: d.id, ...d.data() })));
-    });
+    }, (err) => addLog(`VAULT: SYNC_ERR_${err.code}`));
   }, [user]);
 
   const addLog = (msg) => setLogs(p => [`[${new Date().toLocaleTimeString()}] ${msg}`, ...p].slice(0, 8));
@@ -175,42 +188,49 @@ const App = () => {
 
   useEffect(() => {
     if (!containerRef.current) return;
-    const scene = new THREE.Scene();
-    const camera = new THREE.PerspectiveCamera(75, containerRef.current.clientWidth / containerRef.current.clientHeight, 0.1, 1000);
-    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
-    renderer.setSize(containerRef.current.clientWidth, containerRef.current.clientHeight);
-    containerRef.current.appendChild(renderer.domElement);
+    let renderer, scene, camera, group;
+    
+    try {
+      scene = new THREE.Scene();
+      camera = new THREE.PerspectiveCamera(75, containerRef.current.clientWidth / containerRef.current.clientHeight, 0.1, 1000);
+      renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+      renderer.setSize(containerRef.current.clientWidth, containerRef.current.clientHeight);
+      containerRef.current.appendChild(renderer.domElement);
 
-    const group = new THREE.Group();
-    scene.add(group);
-    scene.add(new THREE.GridHelper(20, 20, 0x083344, 0x083344));
+      group = new THREE.Group();
+      scene.add(group);
+      scene.add(new THREE.GridHelper(20, 20, 0x083344, 0x083344));
 
-    const updateGeometry = () => {
-      group.clear();
-      const color = 0x22d3ee;
-      for (let i = 0; i < params.complexity; i++) {
-        const h = 1.5 + Math.random() * 5;
-        const geo = new THREE.BoxGeometry(2, h, 2);
-        const line = new THREE.LineSegments(new THREE.EdgesGeometry(geo), new THREE.LineBasicMaterial({ color }));
-        const angle = (i / params.complexity) * Math.PI * 2;
-        line.position.set(Math.cos(angle) * 5, h/2, Math.sin(angle) * 5);
-        group.add(line);
-      }
-    };
+      const updateGeometry = () => {
+        group.clear();
+        const color = 0x22d3ee;
+        for (let i = 0; i < params.complexity; i++) {
+          const h = 1.5 + Math.random() * 5;
+          const geo = new THREE.BoxGeometry(2, h, 2);
+          const line = new THREE.LineSegments(new THREE.EdgesGeometry(geo), new THREE.LineBasicMaterial({ color }));
+          const angle = (i / params.complexity) * Math.PI * 2;
+          line.position.set(Math.cos(angle) * 5, h/2, Math.sin(angle) * 5);
+          group.add(line);
+        }
+      };
 
-    updateGeometry();
-    camera.position.set(10, 10, 10);
-    camera.lookAt(0, 2, 0);
+      updateGeometry();
+      camera.position.set(10, 10, 10);
+      camera.lookAt(0, 2, 0);
 
-    const animate = () => {
-      requestAnimationFrame(animate);
-      group.rotation.y += 0.004;
-      renderer.render(scene, camera);
-    };
-    animate();
+      const animate = () => {
+        if (!renderer) return;
+        requestAnimationFrame(animate);
+        group.rotation.y += 0.004;
+        renderer.render(scene, camera);
+      };
+      animate();
+    } catch (e) {
+      addLog(`ENGINE: WEBGL_LOAD_ERR_${e.message}`);
+    }
 
     const handleResize = () => {
-      if (!containerRef.current) return;
+      if (!containerRef.current || !camera || !renderer) return;
       const width = containerRef.current.clientWidth;
       const height = containerRef.current.clientHeight;
       camera.aspect = width / height;
@@ -221,7 +241,7 @@ const App = () => {
     window.addEventListener('resize', handleResize);
     return () => {
       window.removeEventListener('resize', handleResize);
-      containerRef.current?.removeChild(renderer.domElement);
+      if (renderer) containerRef.current?.removeChild(renderer.domElement);
     };
   }, [params.complexity]);
 
@@ -229,7 +249,7 @@ const App = () => {
     <div className="flex flex-col h-screen bg-[#020617] text-cyan-50 font-sans overflow-hidden selection:bg-cyan-500/30">
       <header className="h-20 flex items-center justify-between px-8 border-b border-cyan-500/20 bg-black/40 backdrop-blur-xl z-50">
         <div className="flex items-center gap-6">
-          <div className="p-3 bg-black border border-cyan-500/50 rounded-sm skew-x-[-12deg] shadow-[0_0_20px_rgba(34,211,238,0.4)]"><Cpu className="text-cyan-400 w-6 h-6 skew-x-[12deg]" /></div>
+          <div className="p-3 bg-black border border-cyan-500/50 rounded-sm skew-x-[-12deg] shadow-[0_0_15px_rgba(34,211,238,0.4)]"><Cpu className="text-cyan-400 w-6 h-6 skew-x-[12deg]" /></div>
           <div>
             <h1 className="text-2xl font-black italic tracking-tighter uppercase leading-none">NEO<span className="text-cyan-400">ARCH</span></h1>
             <div className="flex items-center gap-2 mt-1">
@@ -250,6 +270,18 @@ const App = () => {
       <main className="flex flex-1 relative">
         <section className="flex-1 relative bg-[#020617]">
           <div ref={containerRef} className="w-full h-full" />
+          
+          {runtimeError && (
+             <div className="absolute inset-0 flex items-center justify-center bg-black/40 backdrop-blur-md z-50 p-6">
+               <div className="bg-red-950/40 border border-red-500/50 p-10 rounded-3xl max-w-xl w-full text-center">
+                 <AlertTriangle size={48} className="text-red-500 mx-auto mb-6" />
+                 <h2 className="text-red-400 font-black uppercase tracking-widest mb-2">Kernel Panic</h2>
+                 <p className="text-red-200/60 font-mono text-xs leading-relaxed">{runtimeError}</p>
+                 <button onClick={() => window.location.reload()} className="mt-8 px-8 py-2 bg-red-500 text-white font-black uppercase text-[10px] rounded-lg">Attempt Re-Sync</button>
+               </div>
+             </div>
+          )}
+
           {evalData && (
             <div className="absolute top-10 right-10 w-72 bg-black/90 border border-cyan-500/40 p-6 animate-in slide-in-from-right backdrop-blur-xl z-40">
                <div className="flex justify-between items-center mb-6"><h3 className="text-[10px] font-black text-cyan-400 uppercase tracking-widest flex items-center gap-2"><BarChart3 size={14}/> Spatial_Audit</h3><X size={14} className="cursor-pointer text-cyan-900 hover:text-white" onClick={() => setEvalData(null)} /></div>
@@ -300,7 +332,7 @@ const App = () => {
         </div>
         <div className="flex items-center gap-4">
            {isDemoMode && <span className="text-yellow-600 font-black border border-yellow-900/30 px-2 py-0.5 rounded italic">PREVIEW_ONLY</span>}
-           <span className="text-cyan-800">BUILD_3.0.6</span>
+           <span className="text-cyan-800">BUILD_3.0.7</span>
         </div>
       </footer>
     </div>
@@ -321,6 +353,7 @@ const Slider = ({ label, val, min, max, onChange }) => (
   </div>
 );
 
+// --- STANDALONE MOUNTING LOGIC ---
 const rootElement = document.getElementById('root');
 if (rootElement) { createRoot(rootElement).render(<App />); }
 
