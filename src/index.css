@@ -1,0 +1,23 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  background-color: #020617;
+  color: #ecfeff;
+}
+
+body {
+  margin: 0;
+  overflow: hidden;
+  background-color: #020617; /* Fallback for white screen prevention */
+}
+
+/* Custom Scrollbar for Logs */
+.scrollbar-hide::-webkit-scrollbar {
+    display: none;
+}
+.scrollbar-hide {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+}
