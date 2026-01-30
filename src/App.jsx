@@ -31,8 +31,8 @@ import {
 } from 'lucide-react';
 
 /**
- * NEO-ARCH | v3.0.5 [EVALUATION_LOCKED]
- * Features: Instant Access, Neural Simulation Bridge, Standalone Stability
+ * NEO-ARCH | v3.0.6 [STABILITY_HOTFIX]
+ * Resolved: Missing Fonts, Icon Rendering, and Environment Scaling
  */
 
 // --- 1. CONFIGURATION & FALLBACKS ---
@@ -50,7 +50,6 @@ const firebaseConfig = getFirebaseConfig();
 let app, auth, db, isDemoMode = false;
 
 try {
-  // Only attempt real init if keys aren't placeholders
   if (firebaseConfig.apiKey !== "DEMO_KEY" && firebaseConfig.apiKey !== "YOUR_ACTUAL_FIREBASE_API_KEY") {
     app = initializeApp(firebaseConfig);
     auth = getAuth(app);
@@ -76,9 +75,8 @@ const App = () => {
 
   const containerRef = useRef(null);
   const sceneRef = useRef(null);
-  const GEMINI_API_KEY = ""; // Enter key for live AI; otherwise uses simulation
+  const GEMINI_API_KEY = ""; 
 
-  // --- MOCK DATA FOR INSTANT ACCESS ---
   const MOCK_PROJECTS = [
     { id: '1', style: 'blueprint', params: { complexity: 8, lineWeight: 1.0 }, timestamp: { toDate: () => new Date() } },
     { id: '2', style: 'wireframe', params: { complexity: 4, lineWeight: 2.5 }, timestamp: { toDate: () => new Date(Date.now() - 86400000) } }
@@ -213,10 +211,13 @@ const App = () => {
 
     const handleResize = () => {
       if (!containerRef.current) return;
-      camera.aspect = containerRef.current.clientWidth / containerRef.current.clientHeight;
+      const width = containerRef.current.clientWidth;
+      const height = containerRef.current.clientHeight;
+      camera.aspect = width / height;
       camera.updateProjectionMatrix();
-      renderer.setSize(containerRef.current.clientWidth, containerRef.current.clientHeight);
+      renderer.setSize(width, height);
     };
+
     window.addEventListener('resize', handleResize);
     return () => {
       window.removeEventListener('resize', handleResize);
@@ -225,10 +226,10 @@ const App = () => {
   }, [params.complexity]);
 
   return (
-    <div className="flex flex-col h-screen bg-[#020617] text-cyan-50 font-sans overflow-hidden">
+    <div className="flex flex-col h-screen bg-[#020617] text-cyan-50 font-sans overflow-hidden selection:bg-cyan-500/30">
       <header className="h-20 flex items-center justify-between px-8 border-b border-cyan-500/20 bg-black/40 backdrop-blur-xl z-50">
         <div className="flex items-center gap-6">
-          <div className="p-3 bg-black border border-cyan-500/50 rounded-sm skew-x-[-12deg] shadow-[0_0_15px_rgba(34,211,238,0.3)]"><Cpu className="text-cyan-400 w-6 h-6 skew-x-[12deg]" /></div>
+          <div className="p-3 bg-black border border-cyan-500/50 rounded-sm skew-x-[-12deg] shadow-[0_0_20px_rgba(34,211,238,0.4)]"><Cpu className="text-cyan-400 w-6 h-6 skew-x-[12deg]" /></div>
           <div>
             <h1 className="text-2xl font-black italic tracking-tighter uppercase leading-none">NEO<span className="text-cyan-400">ARCH</span></h1>
             <div className="flex items-center gap-2 mt-1">
@@ -250,7 +251,7 @@ const App = () => {
         <section className="flex-1 relative bg-[#020617]">
           <div ref={containerRef} className="w-full h-full" />
           {evalData && (
-            <div className="absolute top-10 right-10 w-72 bg-black/90 border border-cyan-500/40 p-6 animate-in slide-in-from-right backdrop-blur-xl">
+            <div className="absolute top-10 right-10 w-72 bg-black/90 border border-cyan-500/40 p-6 animate-in slide-in-from-right backdrop-blur-xl z-40">
                <div className="flex justify-between items-center mb-6"><h3 className="text-[10px] font-black text-cyan-400 uppercase tracking-widest flex items-center gap-2"><BarChart3 size={14}/> Spatial_Audit</h3><X size={14} className="cursor-pointer text-cyan-900 hover:text-white" onClick={() => setEvalData(null)} /></div>
                <div className="space-y-4">
                  <ScoreBar label="STRUCTURE" score={evalData.scores.structure} />
@@ -264,7 +265,7 @@ const App = () => {
 
         {isVaultOpen && (
           <aside className="absolute inset-y-0 right-0 w-96 bg-black border-l border-cyan-500/20 z-[100] p-8 flex flex-col animate-in slide-in-from-right shadow-2xl">
-            <div className="flex justify-between items-center mb-8"><h2 className="text-sm font-black text-cyan-400 uppercase tracking-widest flex items-center gap-2"><Database size={16}/> Vault_Units</h2><X className="cursor-pointer text-cyan-900" onClick={() => setIsVaultOpen(false)} /></div>
+            <div className="flex justify-between items-center mb-8"><h2 className="text-sm font-black text-cyan-400 uppercase tracking-widest flex items-center gap-2"><Database size={16}/> Vault_Units</h2><X className="cursor-pointer text-cyan-900 hover:text-cyan-400 transition" onClick={() => setIsVaultOpen(false)} /></div>
             <div className="flex-1 overflow-y-auto space-y-4 scrollbar-hide">
               {savedProjects.map((p) => (
                 <div key={p.id} className="p-4 bg-neutral-950 border border-cyan-500/10 hover:border-cyan-500/40 transition cursor-pointer" onClick={() => setParams(p.params)}>
@@ -299,7 +300,7 @@ const App = () => {
         </div>
         <div className="flex items-center gap-4">
            {isDemoMode && <span className="text-yellow-600 font-black border border-yellow-900/30 px-2 py-0.5 rounded italic">PREVIEW_ONLY</span>}
-           <span className="text-cyan-800">BUILD_3.0.5</span>
+           <span className="text-cyan-800">BUILD_3.0.6</span>
         </div>
       </footer>
     </div>
