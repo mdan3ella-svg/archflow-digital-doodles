@@ -4,10 +4,18 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>NEO-ARCH | 3D Framework</title>
-    <!-- Ensure the background matches the application theme to prevent flickering during load -->
+    <style>
+      body { margin: 0; background-color: #020617; color: white; font-family: sans-serif; }
+      #root:empty::after {
+        content: "Initializing Neural Engine...";
+        position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+        font-size: 10px; text-transform: uppercase; letter-spacing: 0.2em; opacity: 0.5;
+      }
+    </style>
   </head>
   <body class="bg-[#020617] overflow-hidden">
     <div id="root"></div>
-    <script type="module" src="/src/App.jsx"></script>
+    <!-- Using relative path for better compatibility with Netlify/Vite -->
+    <script type="module" src="./src/App.jsx"></script>
   </body>
 </html>
