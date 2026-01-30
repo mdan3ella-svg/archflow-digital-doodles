@@ -2,6 +2,7 @@
   command = "npm run build"
   publish = "dist"
 
+# Standard SPA redirect for React/Vite apps to handle client-side routing
 [[redirects]]
   from = "/*"
   to = "/index.html"
