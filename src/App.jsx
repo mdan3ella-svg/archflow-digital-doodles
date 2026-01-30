@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { createRoot } from 'react-dom/client';
 import * as THREE from 'three';
 import { initializeApp } from 'firebase/app';
 import { getAuth, onAuthStateChanged, signInAnonymously, signInWithCustomToken } from 'firebase/auth';
@@ -12,7 +13,7 @@ import {
   PenTool, 
   Settings2, 
   Save, 
-  Image,
+  Image as ImageIcon,
   MousePointer2,
   Wind,
   Sun,
@@ -30,22 +31,21 @@ import {
 
 /**
  * NEO-ARCH | Save & Evaluate Upgrade
- * Production-Ready v3.0.1
- * Includes Environment Guards for Standalone Deployment
+ * Production-Ready v3.0.2
+ * Standalone Mounting Logic Included
  */
 
 // --- PRODUCTION GUARD: PREVENT WHITE SCREEN ---
 const getFirebaseConfig = () => {
   try {
-    // This looks for variables provided by the Canvas preview environment
     if (typeof __firebase_config !== 'undefined' && __firebase_config) {
       return JSON.parse(__firebase_config);
     }
   } catch (e) {
-    console.warn("NEO-ARCH: Canvas environment config not found. Using local fallback.");
+    console.warn("NEO-ARCH: Local environment detected.");
   }
 
-  // FALLBACK: You must fill these in from your Firebase Console for the app to work on Netlify
+  // FALLBACK: Replace with your keys for Netlify to work
   return { 
     apiKey: "YOUR_FIREBASE_API_KEY", 
     authDomain: "YOUR_PROJECT.firebaseapp.com", 
@@ -61,13 +61,12 @@ const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
 
-// Rule 1: Ensure appId is a single segment (required for Firestore paths in this framework)
 const rawAppId = typeof __app_id !== 'undefined' ? __app_id : 'neo-arch-deployment';
 const appId = rawAppId.replace(/[\/\.]/g, '_');
 
 const App = () => {
   const [activeStyle, setActiveStyle] = useState('blueprint');
-  const [logs, setLogs] = useState(["INIT: NEO-KERNEL v3.0.1 LOADED", "AUTH: INITIALIZING..."]);
+  const [logs, setLogs] = useState(["INIT: NEO-KERNEL v3.0.2 LOADED", "AUTH: INITIALIZING..."]);
   const [params, setParams] = useState({ complexity: 4, lineWeight: 1.5, neuralWeight: 0.8 });
   const [user, setUser] = useState(null);
   const [savedProjects, setSavedProjects] = useState([]);
@@ -77,8 +76,6 @@ const App = () => {
 
   const containerRef = useRef(null);
   const sceneRef = useRef(null);
-
-  // USER ACTION REQUIRED: Get your key from https://aistudio.google.com/
   const GEMINI_API_KEY = ""; 
 
   useEffect(() => {
@@ -131,7 +128,7 @@ const App = () => {
       addLog("AUDIT: ERROR - NO_API_KEY_DETECTED");
       setEvalData({ 
         scores: { structure: 70, neural: 85 }, 
-        critique: "Please provide a Gemini API Key in App.jsx to enable Neural Audit." 
+        critique: "Provide Gemini API Key to enable Audit." 
       });
       return;
     }
@@ -148,7 +145,7 @@ const App = () => {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          contents: [{ parts: [{ text: `Critique this 3D architectural massing: Complexity ${params.complexity}/12. One short sentence of techno-optimist feedback.` }] }]
+          contents: [{ parts: [{ text: `Critique this 3D architectural massing: Complexity ${params.complexity}/12. One short sentence of feedback.` }] }]
         })
       });
       const data = await response.json();
@@ -290,5 +287,12 @@ const Slider = ({ label, val, min, max, onChange }) => (
     <input type="range" min={min} max={max} step={0.1} value={val} onChange={(e) => onChange(parseFloat(e.target.value))} className="w-full h-[2px] bg-cyan-950 appearance-none accent-cyan-500 cursor-pointer" />
   </div>
 );
+
+// --- STANDALONE MOUNTING LOGIC ---
+const rootElement = document.getElementById('root');
+if (rootElement) {
+  const root = createRoot(rootElement);
+  root.render(<App />);
+}
 
 export default App;
