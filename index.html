@@ -4,18 +4,15 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>NEO-ARCH | 3D Framework</title>
+    <!-- Tailwind CDN for fallback styling -->
+    <script src="https://cdn.tailwindcss.com"></script>
     <style>
-      body { margin: 0; background-color: #020617; color: white; font-family: sans-serif; }
-      #root:empty::after {
-        content: "Initializing Neural Engine...";
-        position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
-        font-size: 10px; text-transform: uppercase; letter-spacing: 0.2em; opacity: 0.5;
-      }
+      body { margin: 0; background-color: #020617; color: white; font-family: sans-serif; overflow: hidden; }
+      #root { width: 100vw; height: 100vh; }
     </style>
   </head>
-  <body class="bg-[#020617] overflow-hidden">
+  <body class="bg-[#020617]">
     <div id="root"></div>
-    <!-- Using relative path for better compatibility with Netlify/Vite -->
     <script type="module" src="./src/App.jsx"></script>
   </body>
 </html>
