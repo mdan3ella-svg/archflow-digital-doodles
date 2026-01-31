@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import ReactDOM from 'react-dom'; 
 import * as THREE from 'three';
+// REMOVED: External OrbitControls to prevent "White Screen" crashes. Using Native Engine.
 import { initializeApp } from 'firebase/app';
 import { getAuth, onAuthStateChanged, signInAnonymously, signInWithCustomToken } from 'firebase/auth';
 import { getFirestore, collection, addDoc, onSnapshot, serverTimestamp, deleteDoc, doc } from 'firebase/firestore';
@@ -13,14 +14,15 @@ import {
   Maximize, Sun, Moon, Grid, Type, Sliders,
   Cpu, CheckCircle2, Ratio, PenTool,
   Undo, Redo, Trash2, FilePlus, Ruler, Globe, Map, Download, FileJson,
-  FileCode, ScanLine, Layout, AlertTriangle, Calculator
+  FileCode, ScanLine, Layout, AlertTriangle, Calculator, CloudSun
 } from 'lucide-react';
 
 /**
- * Describe by Digital Doodles | v7.8.3 [STABLE_REFRESH]
- * - Core: Native Camera/Orbit Engine (Zero Dependencies).
- * - UI: High-Contrast Dark Glass Dashboard.
- * - Logic: Auto-Naming & Intelligent Voxel Meshing.
+ * Describe by Digital Doodles | v8.0.1 [SOLAR_STABILITY]
+ * - Feature: Real-time Solar Analysis (Time/Azimuth).
+ * - Fix: Anti-Jitter Image Processing (Gaussian Smoothing).
+ * - Fix: Shadow Map Stabilization (Normal Bias).
+ * - UI: Environment Tab for Lighting Control.
  */
 
 // --- 1. CONFIGURATION ---
@@ -92,9 +94,11 @@ const processImageToGeometry = (imageSrc, complexity, mode, threshold = 128, inv
       ctx.drawImage(img, 0, 0, resolution, resolution);
 
       if (mode === 'floorplan') {
-          ctx.filter = `contrast(150%) grayscale(100%) ${invert ? 'invert(100%)' : ''}`;
+          // Increased smoothing to reduce jagged voxel edges (Jitter Fix)
+          ctx.filter = `contrast(200%) grayscale(100%) blur(0.5px) ${invert ? 'invert(100%)' : ''}`;
       } else {
-          ctx.filter = `blur(1px) ${invert ? 'invert(100%)' : ''}`;
+          // Stronger blur for heightmaps to create rolling terrain instead of spikes
+          ctx.filter = `blur(2px) ${invert ? 'invert(100%)' : ''}`;
       }
       ctx.drawImage(canvas, 0, 0); 
       
@@ -143,14 +147,15 @@ const processImageToGeometry = (imageSrc, complexity, mode, threshold = 128, inv
 
 const App = () => {
   const [activePanel, setActivePanel] = useState(null); 
-  const [logs, setLogs] = useState(["[SYS] SYSTEM_READY", "[UI] DARK_MODE_METRICS"]);
+  const [logs, setLogs] = useState(["[SYS] SYSTEM_READY", "[ENV] SOLAR_ENGINE_ACTIVE"]);
   const [isProcessing, setIsProcessing] = useState(false);
   const [activeStyle, setActiveStyle] = useState('plaster'); 
   
   const [params, setParams] = useState({ 
     complexity: 15, height: 1.0, width: 1.0, depth: 1.0, seed: 123, 
     floorHeight: 0.3, siteWidth: 50, units: 'm', showAxis: true, showContext: true,
-    ingestMode: 'floorplan', threshold: 128, invert: false
+    ingestMode: 'floorplan', threshold: 128, invert: false,
+    time: 12, azimuth: 0.25 // Sun Controls
   });
   
   const [metrics, setMetrics] = useState({ gfa: 0, height: 0, levels: 0 });
@@ -160,7 +165,7 @@ const App = () => {
   const [historyIndex, setHistoryIndex] = useState(-1);
 
   const containerRef = useRef(null);
-  const engineRef = useRef({ scene: null, camera: null, renderer: null, group: null });
+  const engineRef = useRef({ scene: null, camera: null, renderer: null, group: null, lights: null });
   const fileInputRef = useRef(null);
   
   // Native Controls
@@ -256,16 +261,21 @@ const App = () => {
     renderer.setSize(w, h);
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     renderer.shadowMap.enabled = true;
-    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap; // Softer shadows for less jitter
     
     containerRef.current.innerHTML = '';
     containerRef.current.appendChild(renderer.domElement);
 
-    const amb = new THREE.AmbientLight(0xffffff, 0.7);
-    const sun = new THREE.DirectionalLight(0xffffff, 0.8);
-    sun.position.set(20, 60, 20);
+    const amb = new THREE.AmbientLight(0xffffff, 0.6); // Slightly lower base ambient
+    const sun = new THREE.DirectionalLight(0xffffff, 1.0);
+    sun.position.set(50, 80, 50);
     sun.castShadow = true;
-    sun.shadow.mapSize.set(2048, 2048);
+    sun.shadow.mapSize.width = 2048; // High res shadow map
+    sun.shadow.mapSize.height = 2048;
+    sun.shadow.camera.near = 0.5;
+    sun.shadow.camera.far = 200;
+    sun.shadow.bias = -0.0005; // Fix shadow acne/jitter
+    sun.shadow.normalBias = 0.02; // Fix self-shadowing artifacts
     scene.add(amb, sun);
 
     const ground = new THREE.Mesh(new THREE.PlaneGeometry(2000, 2000), new THREE.ShadowMaterial({ opacity: 0.1 }));
@@ -296,7 +306,7 @@ const App = () => {
     instancedTrees.receiveShadow = true;
     contextGroup.add(instancedTrees);
 
-    engineRef.current = { scene, camera, renderer, group, contextGroup };
+    engineRef.current = { scene, camera, renderer, group, contextGroup, lights: { sun, amb } };
 
     const animate = () => {
       requestAnimationFrame(animate);
@@ -320,6 +330,40 @@ const App = () => {
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
   }, []);
+
+  // --- ENVIRONMENT UPDATE ---
+  useEffect(() => {
+    const { lights, scene } = engineRef.current;
+    if (!lights || !scene) return;
+
+    // Sun Logic
+    const r = 80;
+    const theta = (params.time - 6) / 12 * Math.PI; // Sunrise 6am -> Sunset 6pm
+    const phi = params.azimuth * Math.PI * 2;
+    
+    // Position Sun based on time
+    lights.sun.position.x = r * Math.cos(theta) * Math.sin(phi);
+    lights.sun.position.y = r * Math.sin(theta);
+    lights.sun.position.z = r * Math.cos(theta) * Math.cos(phi);
+    
+    // Light Color & Intensity based on height
+    const elevation = Math.sin(theta);
+    if (elevation > 0) {
+        lights.sun.intensity = 1.0 * Math.max(0.1, elevation);
+        lights.amb.intensity = 0.5 + (elevation * 0.2);
+        // Sky Color
+        const skyColor = new THREE.Color(0xF5F7FA).lerp(new THREE.Color(0x87CEEB), elevation * 0.3);
+        scene.background = skyColor;
+        scene.fog.color = skyColor;
+    } else {
+        // Night
+        lights.sun.intensity = 0;
+        lights.amb.intensity = 0.2;
+        scene.background = new THREE.Color(0x0a0a1a);
+        scene.fog.color = new THREE.Color(0x0a0a1a);
+    }
+    
+  }, [params.time, params.azimuth]);
 
   // --- NATIVE MOUSE ---
   const handleMouseDown = (e) => { isDragging.current = true; prevMouse.current = { x: e.clientX, y: e.clientY }; };
@@ -481,6 +525,7 @@ const App = () => {
                <ToolBtn Icon={Redo} onClick={handleRedo} title="Redo" />
                <div className="w-px h-6 bg-gray-300/50" />
                <DockItem Icon={Settings2} label="Logic" active={activePanel === 'params'} onClick={() => setActivePanel(activePanel === 'params' ? null : 'params')} />
+               <DockItem Icon={CloudSun} label="Env" active={activePanel === 'env'} onClick={() => setActivePanel(activePanel === 'env' ? null : 'env')} />
                <DockItem Icon={Sparkles} label="Vision" active={activePanel === 'ai'} onClick={() => setActivePanel(activePanel === 'ai' ? null : 'ai')} />
                <DockItem Icon={Layers} label="Layers" active={activePanel === 'layers'} onClick={() => setActivePanel(activePanel === 'layers' ? null : 'layers')} />
                <DockItem Icon={Database} label="Vault" active={activePanel === 'vault'} onClick={() => setActivePanel(activePanel === 'vault' ? null : 'vault')} />
@@ -516,6 +561,15 @@ const App = () => {
                                <InputGroup label="Height" value={params.height} min={0.5} max={5} step={0.1} onChange={v => { setParams(p => ({...p, height: v})); }} onCommit={commitChange} />
                            </section>
                        </>
+                   )}
+
+                   {activePanel === 'env' && (
+                       <section>
+                           <Label>SOLAR ENGINE</Label>
+                           <InputGroup label="Time of Day (H)" value={params.time} min={0} max={24} step={0.5} onChange={v => setParams(p => ({...p, time: v}))} />
+                           <InputGroup label="Rotation" value={params.azimuth} min={0} max={1} step={0.01} onChange={v => setParams(p => ({...p, azimuth: v}))} />
+                           <div className="mt-4 p-2 bg-gray-50 rounded text-[9px] text-gray-400 flex items-center gap-2"><Sun size={12}/> {params.time > 6 && params.time < 18 ? 'Daylight' : 'Night'} Mode Active</div>
+                       </section>
                    )}
 
                    {activePanel === 'ai' && (
